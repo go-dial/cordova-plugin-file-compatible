@@ -1,0 +1,210 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/**
+ * Storage Access Framework (SAF) APIs for Cordova File Plugin
+ * Provides modern, privacy-compliant file access methods
+ */
+var exec = require('cordova/exec');
+
+var SafManager = {
+    /**
+     * Open document picker for file selection
+     * Uses Storage Access Framework to allow users to pick files
+     * 
+     * @param {Array} mimeTypes - Array of MIME types to filter (optional)
+     * @param {Boolean} allowMultiple - Allow multiple file selection (default: false)
+     * @param {Function} successCallback - Success callback with selected file URIs
+     * @param {Function} errorCallback - Error callback
+     */
+    openDocumentPicker: function(mimeTypes, allowMultiple, successCallback, errorCallback) {
+        // Handle parameter variations for backward compatibility
+        if (typeof mimeTypes === 'function') {
+            errorCallback = allowMultiple;
+            successCallback = mimeTypes;
+            mimeTypes = null;
+            allowMultiple = false;
+        } else if (typeof allowMultiple === 'function') {
+            errorCallback = successCallback;
+            successCallback = allowMultiple;
+            allowMultiple = false;
+        }
+        
+        exec(successCallback, errorCallback, 'File', 'openDocumentPicker', [mimeTypes, allowMultiple]);
+    },
+
+    /**
+     * Open directory picker for persistent directory access
+     * Uses Storage Access Framework to allow users to select directories
+     * 
+     * @param {Function} successCallback - Success callback with directory URI
+     * @param {Function} errorCallback - Error callback
+     */
+    openDirectoryPicker: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'File', 'openDirectoryPicker', []);
+    },
+
+    /**
+     * Create a new document
+     * Uses Storage Access Framework to allow users to create files
+     * 
+     * @param {String} fileName - Name of the file to create
+     * @param {String} mimeType - MIME type of the file (default: "*/*")
+     * @param {Function} successCallback - Success callback with created file URI
+     * @param {Function} errorCallback - Error callback
+     */
+    createDocument: function(fileName, mimeType, successCallback, errorCallback) {
+        // Handle parameter variations for backward compatibility
+        if (typeof mimeType === 'function') {
+            errorCallback = successCallback;
+            successCallback = mimeType;
+            mimeType = '*/*';
+        }
+        
+        exec(successCallback, errorCallback, 'File', 'createDocument', [fileName, mimeType]);
+    },
+
+    /**
+     * Get media files using MediaStore (scoped storage)
+     * Accesses media files without requiring storage permissions
+     * 
+     * @param {String} mediaType - Type of media: "image", "video", or "audio"
+     * @param {Function} successCallback - Success callback with array of file objects
+     * @param {Function} errorCallback - Error callback
+     */
+    getMediaFiles: function(mediaType, successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'File', 'getMediaFiles', [mediaType]);
+    },
+
+    /**
+     * Get file information from SAF URI
+     * 
+     * @param {String} uri - SAF URI of the file
+     * @param {Function} successCallback - Success callback with file info object
+     * @param {Function} errorCallback - Error callback
+     */
+    getFileInfo: function(uri, successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'File', 'getFileInfoFromUri', [uri]);
+    },
+
+    /**
+     * Copy file from SAF URI to local storage
+     * 
+     * @param {String} sourceUri - SAF URI of the source file
+     * @param {String} destinationPath - Local path for the destination file
+     * @param {Function} successCallback - Success callback with boolean result
+     * @param {Function} errorCallback - Error callback
+     */
+    copyFromSaf: function(sourceUri, destinationPath, successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'File', 'copyFromSaf', [sourceUri, destinationPath]);
+    },
+
+    /**
+     * Copy file from local storage to SAF URI
+     * 
+     * @param {String} sourcePath - Local path of the source file
+     * @param {String} destinationUri - SAF URI for the destination
+     * @param {Function} successCallback - Success callback with boolean result
+     * @param {Function} errorCallback - Error callback
+     */
+    copyToSaf: function(sourcePath, destinationUri, successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'File', 'copyToSaf', [sourcePath, destinationUri]);
+    },
+
+    /**
+     * Helper method to pick images using SAF
+     * Provides a convenient wrapper for image selection
+     * 
+     * @param {Boolean} allowMultiple - Allow multiple image selection (default: false)
+     * @param {Function} successCallback - Success callback with selected image URIs
+     * @param {Function} errorCallback - Error callback
+     */
+    pickImages: function(allowMultiple, successCallback, errorCallback) {
+        if (typeof allowMultiple === 'function') {
+            errorCallback = successCallback;
+            successCallback = allowMultiple;
+            allowMultiple = false;
+        }
+        
+        this.openDocumentPicker(['image/*'], allowMultiple, successCallback, errorCallback);
+    },
+
+    /**
+     * Helper method to pick videos using SAF
+     * Provides a convenient wrapper for video selection
+     * 
+     * @param {Boolean} allowMultiple - Allow multiple video selection (default: false)
+     * @param {Function} successCallback - Success callback with selected video URIs
+     * @param {Function} errorCallback - Error callback
+     */
+    pickVideos: function(allowMultiple, successCallback, errorCallback) {
+        if (typeof allowMultiple === 'function') {
+            errorCallback = successCallback;
+            successCallback = allowMultiple;
+            allowMultiple = false;
+        }
+        
+        this.openDocumentPicker(['video/*'], allowMultiple, successCallback, errorCallback);
+    },
+
+    /**
+     * Helper method to pick audio files using SAF
+     * Provides a convenient wrapper for audio selection
+     * 
+     * @param {Boolean} allowMultiple - Allow multiple audio selection (default: false)
+     * @param {Function} successCallback - Success callback with selected audio URIs
+     * @param {Function} errorCallback - Error callback
+     */
+    pickAudio: function(allowMultiple, successCallback, errorCallback) {
+        if (typeof allowMultiple === 'function') {
+            errorCallback = successCallback;
+            successCallback = allowMultiple;
+            allowMultiple = false;
+        }
+        
+        this.openDocumentPicker(['audio/*'], allowMultiple, successCallback, errorCallback);
+    },
+
+    /**
+     * Check if the device supports Storage Access Framework
+     * 
+     * @return {Boolean} True if SAF is supported
+     */
+    isSupported: function() {
+        return cordova.platformId === 'android';
+    },
+
+    /**
+     * Migration helper: Convert legacy file paths to SAF URIs where possible
+     * This helps existing apps transition to SAF-based file access
+     * 
+     * @param {String} filePath - Legacy file path
+     * @param {Function} successCallback - Success callback with SAF URI or null
+     * @param {Function} errorCallback - Error callback
+     */
+    migrateToSaf: function(filePath, successCallback, errorCallback) {
+        // For now, return null as migration requires user interaction
+        // Apps should guide users to re-select files using SAF
+        if (successCallback) {
+            successCallback(null);
+        }
+    }
+};
+
+module.exports = SafManager;

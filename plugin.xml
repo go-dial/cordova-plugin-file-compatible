@@ -20,10 +20,10 @@
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
 xmlns:android="http://schemas.android.com/apk/res/android"
-           id="cordova-plugin-file"
-      version="8.1.4-dev">
-    <name>File</name>
-    <description>Cordova File Plugin</description>
+           id="cordova-plugin-file-compatible"
+      version="1.0.0">
+    <name>File Compatible</name>
+    <description>Google Play Policy Compliant Cordova File Plugin with Storage Access Framework</description>
     <license>Apache 2.0</license>
     <keywords>cordova,file</keywords>
     <repo>https://github.com/apache/cordova-plugin-file</repo>
@@ -106,6 +106,10 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <merges target="window" />
     </js-module>
 
+    <js-module src="www/SafManager.js" name="SafManager">
+        <clobbers target="window.SafManager" />
+    </js-module>
+
     <!-- Required for browserify: we always link module below as there is conditional reference
     to this module from requestFileSystem and resolveLocalFileSystemURI modules. -->
     <js-module src="www/browser/isChrome.js" name="isChrome">
@@ -124,6 +128,8 @@ If this is an update to an existing application that did not specify an "Android
       "&lt;preference name="AndroidPersistentFileLocation" value="Compatibility" /&gt;"
 
 to config.xml in order for the application to find previously stored files.
+
+This plugin now uses Storage Access Framework (SAF) for accessing media files to comply with Google Play policies. No special permissions are required for scoped storage access.
         </info>
         <config-file target="res/xml/config.xml" parent="/*">
             <feature name="File" >
@@ -131,6 +137,20 @@ to config.xml in order for the application to find previously stored files.
                 <param name="onload" value="true" />
             </feature>
             <allow-navigation href="cdvfile:*" />
+        </config-file>
+        
+        <!-- SAF content provider for document picker integration -->
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <provider
+                android:name="org.apache.cordova.file.SafDocumentProvider"
+                android:authorities="$PACKAGE_NAME.saf.provider"
+                android:exported="true"
+                android:grantUriPermissions="true"
+                android:permission="android.permission.MANAGE_DOCUMENTS">
+                <intent-filter>
+                    <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+                </intent-filter>
+            </provider>
         </config-file>
 
         <source-file src="src/android/EncodingException.java" target-dir="src/org/apache/cordova/file" />
@@ -146,6 +166,8 @@ to config.xml in order for the application to find previously stored files.
         <source-file src="src/android/ContentFilesystem.java" target-dir="src/org/apache/cordova/file" />
         <source-file src="src/android/AssetFilesystem.java" target-dir="src/org/apache/cordova/file" />
         <source-file src="src/android/PendingRequests.java" target-dir="src/org/apache/cordova/file" />
+        <source-file src="src/android/SafDocumentProvider.java" target-dir="src/org/apache/cordova/file" />
+        <source-file src="src/android/SafFileSystemManager.java" target-dir="src/org/apache/cordova/file" />
 
         <preference name="ANDROIDX_WEBKIT_VERSION" default="1.4.0"/>
         <framework src="androidx.webkit:webkit:$ANDROIDX_WEBKIT_VERSION" />

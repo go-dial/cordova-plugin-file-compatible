@@ -21,6 +21,7 @@ package org.apache.cordova.file;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -55,6 +56,7 @@ import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 
 /**
  * This class provides file and directory services to JavaScript.
@@ -93,6 +95,9 @@ public class FileUtils extends CordovaPlugin {
     private boolean configured = false;
 
     private PendingRequests pendingRequests;
+
+    // SAF File System Manager for Storage Access Framework
+    private SafFileSystemManager safManager;
 
     // This field exists only to support getEntry, below, which has been deprecated
     private static FileUtils filePlugin;
@@ -171,6 +176,9 @@ public class FileUtils extends CordovaPlugin {
         super.initialize(cordova, webView);
         this.filesystems = new ArrayList<Filesystem>();
         this.pendingRequests = new PendingRequests();
+        
+        // Initialize SAF Manager
+        this.safManager = new SafFileSystemManager(webView.getContext(), cordova);
 
         String tempRoot = null;
         String persistentRoot = null;
@@ -527,6 +535,105 @@ public class FileUtils extends CordovaPlugin {
                     callbackContext.success(fname);
                 }
             }, rawArgs, callbackContext);
+        } else if (action.equals("openDocumentPicker")) {
+            // SAF Document Picker
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    JSONArray mimeTypesArray = args.optJSONArray(0);
+                    boolean allowMultiple = args.optBoolean(1, false);
+                    
+                    String[] mimeTypes = null;
+                    if (mimeTypesArray != null) {
+                        mimeTypes = new String[mimeTypesArray.length()];
+                        for (int i = 0; i < mimeTypesArray.length(); i++) {
+                            mimeTypes[i] = mimeTypesArray.getString(i);
+                        }
+                    }
+                    
+                    safManager.openDocumentPicker(mimeTypes, allowMultiple, callbackContext);
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("openDirectoryPicker")) {
+            // SAF Directory Picker
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    safManager.openDirectoryPicker(callbackContext);
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("createDocument")) {
+            // SAF Document Creation
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    String fileName = args.getString(0);
+                    String mimeType = args.optString(1, "*/*");
+                    safManager.createDocument(fileName, mimeType, callbackContext);
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("getMediaFiles")) {
+            // Get media files using MediaStore (scoped storage)
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    String mediaType = args.getString(0);
+                    List<SafFileSystemManager.FileInfo> mediaFiles = safManager.getMediaFiles(mediaType);
+                    
+                    JSONArray result = new JSONArray();
+                    for (SafFileSystemManager.FileInfo info : mediaFiles) {
+                        JSONObject fileObj = new JSONObject();
+                        fileObj.put("name", info.name);
+                        fileObj.put("size", info.size);
+                        fileObj.put("mimeType", info.mimeType);
+                        fileObj.put("uri", info.uri.toString());
+                        result.put(fileObj);
+                    }
+                    
+                    callbackContext.success(result);
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("getFileInfoFromUri")) {
+            // Get file information from SAF URI
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    String uriString = args.getString(0);
+                    Uri uri = Uri.parse(uriString);
+                    SafFileSystemManager.FileInfo info = safManager.getFileInfo(uri);
+                    
+                    JSONObject result = new JSONObject();
+                    result.put("name", info.name);
+                    result.put("size", info.size);
+                    result.put("mimeType", info.mimeType);
+                    result.put("uri", info.uri.toString());
+                    
+                    callbackContext.success(result);
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("copyFromSaf")) {
+            // Copy file from SAF URI to local storage
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    String sourceUriString = args.getString(0);
+                    String destinationPath = args.getString(1);
+                    
+                    Uri sourceUri = Uri.parse(sourceUriString);
+                    File destinationFile = new File(destinationPath);
+                    
+                    boolean success = safManager.copyFromSaf(sourceUri, destinationFile);
+                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, success));
+                }
+            }, rawArgs, callbackContext);
+        } else if (action.equals("copyToSaf")) {
+            // Copy file from local storage to SAF URI
+            threadhelper(new FileOp() {
+                public void run(JSONArray args) throws JSONException {
+                    String sourcePath = args.getString(0);
+                    String destinationUriString = args.getString(1);
+                    
+                    File sourceFile = new File(sourcePath);
+                    Uri destinationUri = Uri.parse(destinationUriString);
+                    
+                    boolean success = safManager.copyToSaf(sourceFile, destinationUri);
+                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, success));
+                }
+            }, rawArgs, callbackContext);
         } else {
             return false;
         }
@@ -534,16 +641,30 @@ public class FileUtils extends CordovaPlugin {
     }
 
     private void getReadPermission(String rawArgs, int action, CallbackContext callbackContext) {
-        int requestCode = pendingRequests.createRequest(rawArgs, action, callbackContext);
+        // For Android 13+, we use SAF instead of requesting media permissions
+        // This provides better user privacy and complies with Google Play policies
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            PermissionHelper.requestPermissions(this, requestCode,
-                    new String[]{Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO});
-        } else {
-            PermissionHelper.requestPermission(this, requestCode, Manifest.permission.READ_EXTERNAL_STORAGE);
+            // No permissions needed - use SAF document picker instead
+            LOG.d(LOG_TAG, "Using SAF for media access on Android 13+");
+            callbackContext.error("Please use SAF document picker for media access on Android 13+");
+            return;
         }
+        
+        // For older Android versions, fall back to legacy permissions
+        int requestCode = pendingRequests.createRequest(rawArgs, action, callbackContext);
+        PermissionHelper.requestPermission(this, requestCode, Manifest.permission.READ_EXTERNAL_STORAGE);
     }
 
     private void getWritePermission(String rawArgs, int action, CallbackContext callbackContext) {
+        // For Android 13+, we use SAF instead of requesting write permissions
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // No permissions needed - use SAF document creation instead
+            LOG.d(LOG_TAG, "Using SAF for file creation on Android 13+");
+            callbackContext.error("Please use SAF document creation for file writing on Android 13+");
+            return;
+        }
+        
+        // For older Android versions, fall back to legacy permissions
         if (android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             int requestCode = pendingRequests.createRequest(rawArgs, action, callbackContext);
             PermissionHelper.requestPermission(this, requestCode, Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -551,19 +672,19 @@ public class FileUtils extends CordovaPlugin {
     }
 
     /**
-     * If your app targets Android 13 (SDK 33) or higher and needs to access media files that other apps have created,
-     * you must request one or more of the following granular media permissions READ_MEDIA_*
-     * instead of the READ_EXTERNAL_STORAGE permission:
-     *
-     * Refer to: https://developer.android.com/about/versions/13/behavior-changes-13
-     *
-     * @return
+     * For Android 13+ (API 33+), we use Storage Access Framework (SAF) instead of 
+     * requesting granular media permissions. This provides better user privacy and 
+     * complies with Google Play policies by avoiding sensitive permissions.
+     * 
+     * For older versions, we fall back to READ_EXTERNAL_STORAGE permission.
+     * 
+     * @return true if app has read access through SAF or legacy permissions
      */
     private boolean hasReadPermission() {
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return PermissionHelper.hasPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
-                    && PermissionHelper.hasPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
-                    && PermissionHelper.hasPermission(this, Manifest.permission.READ_MEDIA_AUDIO);
+            // On Android 13+, apps have scoped access to media files by default
+            // and can use SAF for broader access without requesting sensitive permissions
+            return safManager.hasMediaAccess();
         } else {
             return PermissionHelper.hasPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE);
         }
@@ -571,8 +692,9 @@ public class FileUtils extends CordovaPlugin {
 
     private boolean hasWritePermission() {
         // Starting with API 33, requesting WRITE_EXTERNAL_STORAGE is an auto permission rejection
+        // We use SAF for write operations on Android 13+
         return android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                ? true
+                ? true  // SAF handles write access
                 : PermissionHelper.hasPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
     }
 
@@ -1233,6 +1355,15 @@ public class FileUtils extends CordovaPlugin {
         } else {
             LOG.d(LOG_TAG, "Received permission callback for unknown request code");
         }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        // Handle SAF activity results
+        if (safManager != null) {
+            safManager.onActivityResult(requestCode, resultCode, intent);
+        }
+        super.onActivityResult(requestCode, resultCode, intent);
     }
 
     private String getMimeType(Uri uri) {

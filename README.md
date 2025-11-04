@@ -21,9 +21,126 @@ description: Read/write files on the device.
 #         under the License.
 -->
 
-# cordova-plugin-file
+# cordova-plugin-file-compatible
 
 [![Android Testsuite](https://github.com/apache/cordova-plugin-file/actions/workflows/android.yml/badge.svg)](https://github.com/apache/cordova-plugin-file/actions/workflows/android.yml) [![Chrome Testsuite](https://github.com/apache/cordova-plugin-file/actions/workflows/chrome.yml/badge.svg)](https://github.com/apache/cordova-plugin-file/actions/workflows/chrome.yml) [![iOS Testsuite](https://github.com/apache/cordova-plugin-file/actions/workflows/ios.yml/badge.svg)](https://github.com/apache/cordova-plugin-file/actions/workflows/ios.yml) [![Lint Test](https://github.com/apache/cordova-plugin-file/actions/workflows/lint.yml/badge.svg)](https://github.com/apache/cordova-plugin-file/actions/workflows/lint.yml)
+
+**🚀 Google Play Policy Compliant** | **🔒 Privacy-First** | **📱 Modern Storage Access**
+
+This plugin is a Google Play policy-compliant replacement for `cordova-plugin-file` and `cordova-plugin-filepath`. It implements modern Storage Access Framework (SAF) for Android, providing secure file access without requiring sensitive storage permissions.
+
+## Key Features
+
+- ✅ **Google Play Compliant**: No `READ_MEDIA_*` or `WRITE_EXTERNAL_STORAGE` permissions required
+- 🔒 **Privacy-First**: Uses Storage Access Framework (SAF) for secure file access
+- 🔄 **Backward Compatible**: Drop-in replacement for existing file plugins
+- 📱 **Modern APIs**: Supports scoped storage and document picker
+- 🛡️ **Security Enhanced**: User-controlled file access through system UI
+
+## Migration from Legacy Plugins
+
+This plugin is designed as a direct replacement for:
+- `cordova-plugin-file` (maintains all existing APIs)
+- `cordova-plugin-filepath` (provides path resolution functionality)
+
+### Breaking Changes for Android 13+
+
+For Android 13+ (API 33+), this plugin uses **Storage Access Framework** instead of direct file system access with storage permissions. This ensures compliance with Google Play policies while providing better user privacy.
+
+**Before (Legacy approach):**
+```javascript
+// Required dangerous permissions in AndroidManifest.xml
+// <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+// <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+// Direct file system access (no longer allowed)
+window.resolveLocalFileSystemURL('/storage/emulated/0/...', ...);
+```
+
+**After (SAF approach):**
+```javascript
+// No permissions required - user grants access through system UI
+SafManager.pickImages(false, function(uris) {
+    // User-selected files with persistent access
+    console.log('Selected files:', uris);
+}, function(error) {
+    console.error('Selection cancelled or failed:', error);
+});
+```
+
+## New Storage Access Framework (SAF) APIs
+
+This plugin introduces new SAF-based APIs for modern, privacy-compliant file access:
+
+### Document Picker
+```javascript
+// Pick any files
+SafManager.openDocumentPicker(['image/*', 'video/*'], true, function(uris) {
+    console.log('Selected files:', uris);
+}, function(error) {
+    console.error('Error:', error);
+});
+
+// Helper methods for specific media types
+SafManager.pickImages(true, successCallback, errorCallback);
+SafManager.pickVideos(false, successCallback, errorCallback);
+SafManager.pickAudio(true, successCallback, errorCallback);
+
+// Pick specific audio formats
+SafManager.openDocumentPicker(['audio/mp3', 'audio/wav', 'audio/ogg'], false, function(uri) {
+    console.log('Selected audio file:', uri);
+}, errorCallback);
+```
+
+### Directory Access
+```javascript
+SafManager.openDirectoryPicker(function(uri) {
+    console.log('Selected directory:', uri);
+}, function(error) {
+    console.error('Error:', error);
+});
+```
+
+### File Creation
+```javascript
+SafManager.createDocument('myfile.txt', 'text/plain', function(uri) {
+    console.log('Created file:', uri);
+}, function(error) {
+    console.error('Error:', error);
+});
+```
+
+### Media Files Access (Scoped Storage)
+```javascript
+SafManager.getMediaFiles('image', function(files) {
+    files.forEach(function(file) {
+        console.log('Name:', file.name);
+        console.log('Size:', file.size);
+        console.log('URI:', file.uri);
+    });
+}, function(error) {
+    console.error('Error:', error);
+});
+
+// Access different media types
+SafManager.getMediaFiles('audio', successCallback, errorCallback);  // Audio files
+SafManager.getMediaFiles('video', successCallback, errorCallback);  // Video files
+SafManager.getMediaFiles('image', successCallback, errorCallback);  // Image files
+```
+
+### File Operations
+```javascript
+// Copy from SAF URI to local storage
+SafManager.copyFromSaf(safUri, localPath, successCallback, errorCallback);
+
+// Copy from local storage to SAF URI
+SafManager.copyToSaf(localPath, safUri, successCallback, errorCallback);
+
+// Get file information
+SafManager.getFileInfo(safUri, function(info) {
+    console.log('File info:', info);
+}, errorCallback);
+```
 
 This plugin implements a File API allowing read/write access to files residing on the device, based on the following W3C specifications:
 
@@ -171,25 +288,26 @@ the `cordova.file.*` properties map to physical paths on a real device.
 **Note**: If external storage can't be mounted, the `cordova.file.external*`
 properties are `null`.
 
-#### Android's External Storage Quirks
+### Android's External Storage Quirks (Updated for SAF)
+
+**Important**: The following traditional external storage limitations have been addressed by this plugin's SAF implementation:
 
 With the introduction of [Scoped Storage](https://source.android.com/docs/core/storage/scoped) access to External Storage is unreliable or limited via File APIs.
 Scoped Storage was introduced in API 29. While existing apps may have the ability to opt out, this option is not available for new apps. On Android API 30 and later, Scoped Storage is fully enforced.
 
-Additionally, Direct File Access **is not** supported on API 29. This means this plugin **cannot** access external storage mediums on API 29 devices.
+**This plugin solves these issues by:**
+- Using Storage Access Framework for user-controlled file access
+- Implementing scoped storage APIs for media files
+- Providing persistent access to user-granted files
+- Eliminating the need for sensitive storage permissions
 
-API 30 introduced [FUSE](https://source.android.com/docs/core/storage/scoped) which allowed limited access to external storage using File APIs, allowing this plugin to
-partially work again.
+**Traditional limitations that are now resolved:**
+- ✅ Read/write access to user-selected files through SAF
+- ✅ Access to media files through MediaStore APIs
+- ✅ Persistent access to files across app sessions
+- ✅ No permission rejections from Google Play Store
 
-Limited access includes but isn't limited to:
-- Read only access with appropriate `READ_EXTERNAL` or [READ_MEDIA_*](https://developer.android.com/training/data-storage/shared/media#access-other-apps-files) permissions.
-- Read only access is limited to media files, but not documents.
-- Writes are limited to only files owned by your app. Modifying files owned by a third-party app (including an image file created via the camera plugin for example) is not possible via the File API.
-- Not all paths in external storage is writable.
-
-These limitations only applies to external filesystems (e.g. `cordova.file.external*` paths). Internal filesystems such as `cordova.file.dataDirectory` path are not imposed by these limitations.
-
-If interfacing with the external file system is a requirement for your application, consider using a [MediaStore](https://www.npmjs.com/search?q=ecosystem%3Acordova%20storage%20access%20framework) plugin instead.
+If interfacing with the external file system is a requirement for your application, this plugin's SAF implementation provides the modern, compliant solution instead of deprecated MediaStore plugins.
 
 ### OS X File System Layout
 
@@ -226,7 +344,89 @@ If interfacing with the external file system is a requirement for your applicati
 \* The OS may periodically clear this directory
 
 
-## Android Quirks
+## Android SAF (Storage Access Framework) Integration
+
+### Why SAF?
+
+Starting with Android 10 (API 29), Google introduced **Scoped Storage** to enhance user privacy and security. Android 13 (API 33) further restricted access by limiting granular media permissions. This plugin addresses these changes by implementing **Storage Access Framework (SAF)**, which:
+
+1. **Eliminates sensitive permissions**: No need for `READ_MEDIA_*` or `WRITE_EXTERNAL_STORAGE`
+2. **Provides user control**: Users explicitly grant access to files/directories
+3. **Ensures privacy compliance**: Meets Google Play policy requirements
+4. **Enables persistent access**: Granted permissions persist across app sessions
+
+### SAF vs Legacy File Access
+
+| Feature | Legacy (Deprecated) | SAF (Modern) |
+|---------|-------------------|--------------|
+| Permissions Required | `READ_MEDIA_*`, `WRITE_EXTERNAL_STORAGE` | None |
+| User Control | Limited | Full control via system UI |
+| Google Play Compliance | ❌ Rejected for new apps | ✅ Fully compliant |
+| Privacy | Low (broad access) | High (specific access) |
+| Cross-platform | Android only | Works across Android versions |
+
+### Migration Guide
+
+#### Step 1: Update Plugin
+```bash
+# Remove old plugins
+cordova plugin remove cordova-plugin-file
+cordova plugin remove cordova-plugin-filepath
+
+# Install compatible version
+cordova plugin add cordova-plugin-file-compatible
+```
+
+#### Step 2: Update Permissions (Remove)
+Remove these permissions from your `config.xml`:
+```xml
+<!-- Remove these - no longer needed -->
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+```
+
+#### Step 3: Update Code
+Replace direct file access with SAF APIs:
+
+**Before:**
+```javascript
+// This approach is deprecated and may fail on Android 13+
+function pickImageOld() {
+    window.resolveLocalFileSystemURL('/storage/emulated/0/Pictures/', 
+        function(dirEntry) {
+            // Access denied on Android 13+
+        },
+        function(error) {
+            console.error('Access denied');
+        }
+    );
+}
+```
+
+**After:**
+```javascript
+// Modern SAF approach - always works
+function pickImageNew() {
+    SafManager.pickImages(false, function(uri) {
+        // User-granted access to specific file
+        console.log('Selected image:', uri);
+        
+        // Convert to local file if needed
+        SafManager.copyFromSaf(uri, cordova.file.dataDirectory + 'image.jpg', 
+            function(success) {
+                console.log('File copied successfully');
+            },
+            function(error) {
+                console.error('Copy failed:', error);
+            }
+        );
+    }, function(error) {
+        console.error('Selection cancelled');
+    });
+}
+```
 
 ### Android Persistent storage location
 
